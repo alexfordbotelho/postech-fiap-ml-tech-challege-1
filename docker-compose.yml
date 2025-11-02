@@ -1,0 +1,118 @@
+version: '3.9'
+
+services:
+  api-tech-challenger:
+    build:
+      context: .
+      dockerfile: Dockerfile.yml
+    container_name: api
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .env
+    ports:
+      - "8081:8000"
+    environment:
+      MONGODB_URL: "mongodb://${USER_MONGODB}:${PASS_MONGODB}@mongodb:27017/app_db?authSource=admin"
+    command: [
+      "gunicorn",
+      "-k","uvicorn.workers.UvicornWorker",
+      "-w","2",
+      "-b","0.0.0.0:8000",
+      "--access-logfile","-",
+      "--error-logfile","-",
+      "--log-level","info",
+      "app.main:app"
+    ]
+    labels:
+      - "logging=enabled"
+      - "service=api-tech-challenger"
+      - "environment=prod"
+    depends_on:
+      - loki
+      - mongodb
+    networks:
+      - tech-challenger-network
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "${PROMETHEUS_PORT}:9090"
+    networks:
+      - tech-challenger-network
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: loki
+    command: -config.file=/etc/loki/config/loki-config.yml
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/config/loki-config.yml:ro
+      - loki-data:/loki
+    ports:
+      - "${LOKI_PORT}:3100"
+    networks:
+      - tech-challenger-network
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: promtail
+    command: -config.file=/etc/promtail/config/promtail-config.yml
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/config/promtail-config.yml:ro
+    depends_on:
+      - loki
+    networks:
+      - tech-challenger-network
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "${GRAFANA_PORT}:3000"
+    depends_on:
+      - loki
+      - prometheus
+    networks:
+      - tech-challenger-network
+
+  mongodb:
+    image: mongodb/mongodb-community-server:latest
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "mongodb://${USER_MONGODB}:${PASS_MONGODB}@localhost:27017/admin", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${USER_MONGODB}
+      MONGO_INITDB_ROOT_PASSWORD: ${PASS_MONGODB}
+    networks:
+      - tech-challenger-network
+
+volumes:
+  grafana-data:
+  loki-data:
+  mongodb:
+
+networks:
+  tech-challenger-network:
+    driver: bridge
