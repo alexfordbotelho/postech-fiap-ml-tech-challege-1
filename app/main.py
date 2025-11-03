@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from typing import List, Literal, Dict, Union
 from pydantic import GetCoreSchemaHandler
 from pydantic_core import core_schema
+from prometheus_fastapi_instrumentator import Instrumentator
 from app.webscrapper import main_async
 from app.machine_learning import (
     FeatureInfo,
@@ -278,7 +279,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-
 @app.on_event("startup")
 async def startup_event():
     """
@@ -345,6 +345,12 @@ app.add_middleware(
 # IMPORTANTE: A ordem importa! AuthContextMiddleware deve vir antes do LoggingMiddleware
 app.add_middleware(AuthContextMiddleware)
 app.add_middleware(LoggingMiddleware)
+instrumentator = Instrumentator().instrument(app)
+
+# métricas Prometheus em /metrics
+@app.on_event("startup")
+async def _startup():
+    instrumentator.expose(app, endpoint="/metrics")
 
 
 # ============== ROTAS DE AUTENTICAÇÃO (PÚBLICAS) ==============
