@@ -1,12 +1,10 @@
-project_id   = "my-project-1526473640741"
-region       = "us-central1"
-zone         = "us-central1-a"
-instance_name = "vm-docker-app"
-machine_type = "e2-medium"
+# Exemplo de arquivo terraform.tfvars
+# Copie este arquivo e ajuste os valores conforme necessário
 
-# Seu repo (público)
-repo_url = "https://github.com/usuario/seu-repo.git"
-
-# App
-app_name = "minha-api"
-app_port = 8080
+project_id      = "<PROJECT_ID>"
+region          = "us-central1"
+zone            = "us-central1-a"
+app_name        = "<APP_NAME>"
+machine_type    = "e2-medium"
+git_repository  = "<GIT_REPOSITORY_URL>"
+use_static_ip   = false
